@@ -35,8 +35,15 @@ jobs:
       - name: Run suite
         env:
           E2E_BASE_URL: ${{ inputs.base_url || vars.E2E_BASE_URL }}
-        run: pytest tests/e2e --junit-xml=playwright-run.xml
+        run: >
+          pytest tests/e2e -v
+          --junit-xml=playwright-run.xml
+          --html=reports/e2e-report.html --self-contained-html
+          --screenshot=only-on-failure --output=reports/artifacts
 
+      # --self-contained-html embeds all CSS/JS/screenshots as base64 in one
+      # file, so it opens straight from disk with no server — see the report
+      # section of README.md for what "aesthetic" means here.
       - name: Upload run artifact
         if: always()
         uses: actions/upload-artifact@v4
@@ -44,5 +51,5 @@ jobs:
           name: playwright-run
           path: |
             playwright-run.xml
-            test-results/
+            reports/
           if-no-files-found: warn
