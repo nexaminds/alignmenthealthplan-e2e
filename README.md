@@ -34,14 +34,14 @@ Exit codes worth reading: `0` all passed · `1` failures · `5` **no tests colle
 
 Set the repo variable `E2E_BASE_URL` (Settings → Secrets and variables → Actions → Variables), or pass `base_url` when dispatching the workflow manually.
 
-The JUnit XML uploads as the `playwright-run` artifact. **That artifact is the source of truth for every reported result.**
+The JUnit XML uploads as the `playwright-run` artifact, and a self-contained `reports/e2e-report.html` uploads alongside it for human viewing. **The JUnit artifact is the source of truth for every reported result.**
 
 ## Conventions
 
 - Test names map 1:1 to case matrix IDs: `E2E-01` → `test_e2e_01_<behavior>`.
 - One behavior per test. No inter-test ordering dependencies.
 - Paths resolve relative to the repo; no dev-machine absolute paths anywhere.
-- Run output (`playwright-run.xml`, screenshots, `test-results/`) is gitignored. Tests are the durable artifact; run output is not.
+- Run output (`playwright-run.xml`, `reports/`, screenshots, `test-results/`) is gitignored. Tests are the durable artifact; run output is not.
 
 ## Reporting
 
