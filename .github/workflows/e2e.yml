@@ -53,3 +53,59 @@ jobs:
             playwright-run.xml
             reports/
           if-no-files-found: warn
+
+      # Fires regardless of the pipeline's own bridge/relay state — this talks
+      # to Slack directly, not through a Managed Agent turn, so it isn't
+      # subject to the long-turn relay timeout that's dropped reports before.
+      - name: Notify Slack
+        if: always()
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import urllib.request
+          import xml.etree.ElementTree as ET
+
+          run_url = os.environ["RUN_URL"]
+
+          try:
+              suite = ET.parse("playwright-run.xml").getroot().find("testsuite")
+              total = int(suite.get("tests", 0))
+              failed = int(suite.get("failures", 0))
+              errored = int(suite.get("errors", 0))
+              skipped = int(suite.get("skipped", 0))
+              passed = total - failed - errored - skipped
+              icon = ":white_check_mark:" if failed == 0 and errored == 0 else ":x:"
+              summary = (
+                  f"{icon} *E2E run finished* — {passed} passed, {failed} failed, "
+                  f"{errored} errored, {skipped} skipped, {total} total\n"
+                  f"Run: {run_url}\n"
+                  f"Report: download the `playwright-run` artifact from the run page above "
+                  f"(self-contained HTML + JUnit XML — counts here are parsed straight from it)."
+              )
+          except Exception as exc:  # no JUnit XML at all — the suite never produced results
+              summary = (
+                  f":warning: E2E run finished (job status: {os.environ['JOB_STATUS']}) but "
+                  f"produced no JUnit report ({exc}) — this is a blocked run, not a pass. "
+                  f"Run: {run_url}"
+              )
+
+          req = urllib.request.Request(
+              "https://slack.com/api/chat.postMessage",
+              data=json.dumps({"channel": os.environ["SLACK_CHANNEL_ID"], "text": summary}).encode("utf-8"),
+              headers={
+                  "Authorization": "Bearer " + os.environ["SLACK_BOT_TOKEN"],
+                  "Content-Type": "application/json; charset=utf-8",
+              },
+              method="POST",
+          )
+          with urllib.request.urlopen(req) as resp:
+              result = json.loads(resp.read())
+              if not result.get("ok"):
+                  raise SystemExit(f"Slack post failed: {result}")
+          PY
