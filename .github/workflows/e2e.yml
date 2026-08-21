@@ -1,235 +1,120 @@
 name: e2e
 
-
-
 # Gives the suite a runner with open egress, so Playwright browsers can be
-
 # installed even when the agent sandbox cannot reach cdn.playwright.dev.
 
-
-
 on:
-
   workflow_dispatch:
-
     inputs:
-
       base_url:
-
         description: Target base URL (overrides the E2E_BASE_URL repo variable)
-
         required: false
-
         type: string
-
   pull_request:
-
   # Fires on EVERY branch, not just main. An agent that commits a suite but
   # stops short of opening a PR would otherwise produce zero CI runs and zero
   # report - which has happened repeatedly. Triggering on any push makes the
   # report independent of whether a PR ever gets opened.
   push:
 jobs:
-
   e2e:
-
     runs-on: ubuntu-latest
-
     timeout-minutes: 20
-
     steps:
-
       - uses: actions/checkout@v4
 
-
-
       - uses: actions/setup-python@v5
-
         with:
-
           python-version: "3.12"
-
           cache: pip
 
-
-
       - name: Install dependencies
-
         run: pip install -r requirements.txt
 
-
-
       - name: Install Playwright browsers
-
         run: playwright install --with-deps chromium
 
-
-
       # Scans the whole tests/ tree (pytest discovers test_*.py recursively in
-
       # every subfolder by default) rather than just tests/e2e — this has
-
       # actually shipped wrong before: a real, committed suite sat at
-
       # tests/test_foo.py instead of tests/e2e/test_foo.py, CI silently ran
-
       # only the pre-existing seed test, and reported a clean "success" for
-
       # a suite that never executed. Scanning tests/ makes CI correct
-
       # regardless of which subfolder a given run lands the file in.
-
       - name: Run suite
-
         env:
-
           E2E_BASE_URL: ${{ inputs.base_url || vars.E2E_BASE_URL }}
-
         run: >
-
           pytest tests -v
-
           --junit-xml=playwright-run.xml
-
           --html=reports/e2e-report.html --self-contained-html
-
           --screenshot=only-on-failure --output=reports/artifacts
 
-
-
       # --self-contained-html embeds all CSS/JS/screenshots as base64 in one
-
       # file, so it opens straight from disk with no server — see the report
-
       # section of README.md for what "aesthetic" means here.
-
       - name: Upload run artifact
-
         if: always()
-
         uses: actions/upload-artifact@v4
-
         with:
-
           name: playwright-run
-
           path: |
-
             playwright-run.xml
-
             reports/
-
           if-no-files-found: warn
 
-
-
       # Fires regardless of the pipeline's own bridge/relay state — this talks
-
       # to Slack directly, not through a Managed Agent turn, so it isn't
-
       # subject to the long-turn relay timeout that's dropped reports before.
-
       - name: Notify Slack
-
         if: always()
-
         env:
-
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-
           SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
-
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-
           JOB_STATUS: ${{ job.status }}
-
         run: |
-
           python3 - <<'PY'
-
           import json
-
           import os
-
           import urllib.request
-
           import xml.etree.ElementTree as ET
-
-
 
           run_url = os.environ["RUN_URL"]
 
-
-
           try:
-
               suite = ET.parse("playwright-run.xml").getroot().find("testsuite")
-
               total = int(suite.get("tests", 0))
-
               failed = int(suite.get("failures", 0))
-
               errored = int(suite.get("errors", 0))
-
               skipped = int(suite.get("skipped", 0))
-
               passed = total - failed - errored - skipped
-
               icon = ":white_check_mark:" if failed == 0 and errored == 0 else ":x:"
-
               summary = (
-
                   f"{icon} *E2E run finished* — {passed} passed, {failed} failed, "
-
                   f"{errored} errored, {skipped} skipped, {total} total\n"
-
                   f"Run: {run_url}\n"
-
                   f"Report: download the `playwright-run` artifact from the run page above "
-
                   f"(self-contained HTML + JUnit XML — counts here are parsed straight from it)."
-
               )
-
           except Exception as exc:  # no JUnit XML at all — the suite never produced results
-
               summary = (
-
                   f":warning: E2E run finished (job status: {os.environ['JOB_STATUS']}) but "
-
                   f"produced no JUnit report ({exc}) — this is a blocked run, not a pass. "
-
                   f"Run: {run_url}"
-
               )
-
-
 
           req = urllib.request.Request(
-
               "https://slack.com/api/chat.postMessage",
-
               data=json.dumps({"channel": os.environ["SLACK_CHANNEL_ID"], "text": summary}).encode("utf-8"),
-
               headers={
-
                   "Authorization": "Bearer " + os.environ["SLACK_BOT_TOKEN"],
-
                   "Content-Type": "application/json; charset=utf-8",
-
               },
-
               method="POST",
-
           )
-
           with urllib.request.urlopen(req) as resp:
-
               result = json.loads(resp.read())
-
               if not result.get("ok"):
-
                   raise SystemExit(f"Slack post failed: {result}")
-
           PY
-
