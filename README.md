@@ -21,12 +21,21 @@ pip install -r requirements.txt
 playwright install --with-deps chromium
 
 export E2E_BASE_URL=https://www.alignmenthealthplan.com
-pytest tests/e2e --junit-xml=playwright-run.xml
+pytest tests/e2e -v \
+  --junit-xml=playwright-run.xml \
+  --html=reports/e2e-report.html --self-contained-html \
+  --screenshot=only-on-failure --output=reports/artifacts
 ```
 
 `E2E_BASE_URL` has **no default**. An unset value fails loudly — a silent fallback makes a green run meaningless.
 
 Exit codes worth reading: `0` all passed · `1` failures · `5` **no tests collected**. Exit 5 is a blocked run, not a pass.
+
+## The HTML report
+
+`--html=reports/e2e-report.html --self-contained-html` produces one file: sortable and filterable by outcome, a collapsible detail panel per case, and — because pytest-playwright's `--screenshot=only-on-failure` is wired in — a screenshot embedded (base64, no external files) on every failing case. It opens straight from disk in any browser, no server involved.
+
+It is **not committed to git** — it's regenerated every run and would only rot in history otherwise. It ships as the `playwright-run` CI build artifact (see below) alongside the JUnit XML.
 
 ## CI
 
@@ -34,14 +43,14 @@ Exit codes worth reading: `0` all passed · `1` failures · `5` **no tests colle
 
 Set the repo variable `E2E_BASE_URL` (Settings → Secrets and variables → Actions → Variables), or pass `base_url` when dispatching the workflow manually.
 
-The JUnit XML uploads as the `playwright-run` artifact. **That artifact is the source of truth for every reported result.**
+Every run uploads a `playwright-run` build artifact containing `playwright-run.xml` and `reports/` (the HTML report plus failure screenshots). Download it from the workflow run's **Summary** page → *Artifacts*, unzip, and open `e2e-report.html`. **The JUnit XML inside it is the source of truth for every reported result** — the HTML report is a rendering of the same data, not a second source.
 
 ## Conventions
 
 - Test names map 1:1 to case matrix IDs: `E2E-01` → `test_e2e_01_<behavior>`.
 - One behavior per test. No inter-test ordering dependencies.
 - Paths resolve relative to the repo; no dev-machine absolute paths anywhere.
-- Run output (`playwright-run.xml`, screenshots, `test-results/`) is gitignored. Tests are the durable artifact; run output is not.
+- Run output (`playwright-run.xml`, `reports/`, `test-results/`) is gitignored. Tests are the durable artifact; run output is not.
 
 ## Reporting
 
@@ -51,6 +60,7 @@ Every run returns the delivery block from the SDET reporting contract:
 Repository / Branch / Commit / PR
 Verification: ran-and-passed | ran-with-failures | blocked-and-why
 Cases: <total> total, <n> passed, <n> failed, <n> errored, <n> not run
+Report: <playwright-run artifact URL from the CI run>
 ```
 
 Counts must reconcile against the JUnit artifact, and a case absent from it is `NOT RUN` — never `PASS`.
