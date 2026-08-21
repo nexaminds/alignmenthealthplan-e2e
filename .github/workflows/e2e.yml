@@ -32,11 +32,18 @@ jobs:
       - name: Install Playwright browsers
         run: playwright install --with-deps chromium
 
+      # Scans the whole tests/ tree (pytest discovers test_*.py recursively in
+      # every subfolder by default) rather than just tests/e2e — this has
+      # actually shipped wrong before: a real, committed suite sat at
+      # tests/test_foo.py instead of tests/e2e/test_foo.py, CI silently ran
+      # only the pre-existing seed test, and reported a clean "success" for
+      # a suite that never executed. Scanning tests/ makes CI correct
+      # regardless of which subfolder a given run lands the file in.
       - name: Run suite
         env:
           E2E_BASE_URL: ${{ inputs.base_url || vars.E2E_BASE_URL }}
         run: >
-          pytest tests/e2e -v
+          pytest tests -v
           --junit-xml=playwright-run.xml
           --html=reports/e2e-report.html --self-contained-html
           --screenshot=only-on-failure --output=reports/artifacts
