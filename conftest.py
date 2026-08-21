@@ -34,6 +34,27 @@ def writes_allowed() -> bool:
     return os.environ.get("E2E_ALLOW_WRITES", "").strip().lower() in {"1", "true", "yes"}
 
 
+@pytest.fixture(scope="session")
+def browser_context_args(browser_context_args):
+    """Tolerate a TLS-intercepting egress proxy.
+
+    Verified behaviour: inside the Claude Managed Agents sandbox, `curl` reaches
+    the target fine (HTTP 200) because it trusts the system CA bundle, which
+    includes the proxy's interception CA. Chromium ships its own CA store and
+    ignores the system one, so it rejects the same connection with
+    ERR_CERT_AUTHORITY_INVALID and every test fails before its first assertion.
+
+    Setting ignore_https_errors makes the proxy transparent to the browser.
+
+    Trade-off, stated plainly: this disables certificate validation, so the
+    suite can no longer detect a genuine certificate fault on the target. That
+    is acceptable here - these are public marketing pages read through a proxy
+    we control - but it is a real reduction in what the suite can catch, not a
+    free win. It is a no-op locally and in CI, where nothing intercepts TLS.
+    """
+    return {**browser_context_args, "ignore_https_errors": True}
+
+
 def pytest_collection_modifyitems(config, items):
     """Skip write-performing tests unless writes are explicitly enabled.
 
