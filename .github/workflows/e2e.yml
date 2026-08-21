@@ -35,7 +35,10 @@ jobs:
       - name: Run suite
         env:
           E2E_BASE_URL: ${{ inputs.base_url || vars.E2E_BASE_URL }}
-        run: pytest tests/e2e --junit-xml=playwright-run.xml
+        run: >
+          pytest tests/e2e --junit-xml=playwright-run.xml
+          --html=reports/e2e-report.html --self-contained-html
+          --screenshot=only-on-failure --output=test-results
 
       - name: Upload run artifact
         if: always()
@@ -44,5 +47,6 @@ jobs:
           name: playwright-run
           path: |
             playwright-run.xml
+            reports/
             test-results/
           if-no-files-found: warn
