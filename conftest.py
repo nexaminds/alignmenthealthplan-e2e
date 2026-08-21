@@ -34,6 +34,14 @@ def writes_allowed() -> bool:
     return os.environ.get("E2E_ALLOW_WRITES", "").strip().lower() in {"1", "true", "yes"}
 
 
+@pytest.fixture(scope="session")
+def browser_context_args():
+    """Configure browser context to ignore HTTPS errors for production testing."""
+    return {
+        "ignore_https_errors": True,
+    }
+
+
 def pytest_collection_modifyitems(config, items):
     """Skip write-performing tests unless writes are explicitly enabled.
 
