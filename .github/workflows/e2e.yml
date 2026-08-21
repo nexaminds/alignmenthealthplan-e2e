@@ -1,0 +1,48 @@
+name: e2e
+
+# Gives the suite a runner with open egress, so Playwright browsers can be
+# installed even when the agent sandbox cannot reach cdn.playwright.dev.
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: Target base URL (overrides the E2E_BASE_URL repo variable)
+        required: false
+        type: string
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install Playwright browsers
+        run: playwright install --with-deps chromium
+
+      - name: Run suite
+        env:
+          E2E_BASE_URL: ${{ inputs.base_url || vars.E2E_BASE_URL }}
+        run: pytest tests/e2e --junit-xml=playwright-run.xml
+
+      - name: Upload run artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-run
+          path: |
+            playwright-run.xml
+            test-results/
+          if-no-files-found: warn
