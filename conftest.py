@@ -10,8 +10,8 @@ rather than left to reviewer discipline:
 """
 
 import os
-
 import pytest
+from playwright.sync_api import sync_playwright
 
 
 @pytest.fixture(scope="session")
@@ -32,6 +32,14 @@ def base_url() -> str:
 def writes_allowed() -> bool:
     """True only when the operator has opted into state-changing tests."""
     return os.environ.get("E2E_ALLOW_WRITES", "").strip().lower() in {"1", "true", "yes"}
+
+
+@pytest.fixture(scope="session")
+def browser_context_args():
+    """Configure Playwright browser with SSL certificate validation disabled for testing."""
+    return {
+        "ignore_https_errors": True,
+    }
 
 
 def pytest_collection_modifyitems(config, items):
