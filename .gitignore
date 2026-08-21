@@ -4,9 +4,12 @@ __pycache__/
 venv/
 .pytest_cache/
 
-# run output — never committed, see reporting contract
+# run output — never committed, see reporting contract.
+# The HTML report is generated fresh every run and shipped as a CI build
+# artifact instead — see .github/workflows/e2e.yml.
 playwright-run.xml
 playwright-run.json
+reports/
 playwright-report/
 test-results/
 *.png
