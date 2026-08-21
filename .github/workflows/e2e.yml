@@ -16,6 +16,15 @@ on:
   # report - which has happened repeatedly. Triggering on any push makes the
   # report independent of whether a PR ever gets opened.
   push:
+
+# A commit on a branch with an open PR fires BOTH push and pull_request,
+# producing two identical runs and two Slack messages. Grouping them by branch
+# with cancel-in-progress collapses that to a single effective run, while still
+# guaranteeing a run (and therefore a report) on a branch that has no PR yet.
+concurrency:
+  group: e2e-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 jobs:
   e2e:
     runs-on: ubuntu-latest
@@ -67,7 +76,7 @@ jobs:
       # to Slack directly, not through a Managed Agent turn, so it isn't
       # subject to the long-turn relay timeout that's dropped reports before.
       - name: Notify Slack
-        if: always()
+        if: success() || failure()
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
